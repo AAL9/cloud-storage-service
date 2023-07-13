@@ -41,7 +41,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'cloudService.urls'
+ROOT_URLCONF = 'CloudService.urls'
 
 TEMPLATES = [
     {
@@ -59,7 +59,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'cloudService.wsgi.application'
+WSGI_APPLICATION = 'CloudService.wsgi.application'
 
 
 # Database
