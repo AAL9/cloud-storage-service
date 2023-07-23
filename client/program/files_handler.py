@@ -8,7 +8,10 @@ class FilesHandler:
     def get_all_files_metadata(self):
         file_list = []
         self._get_all_files_metadata_recursive(self.storage_directory, file_list)
-        file_list = [str(path).replace(str(self.storage_directory), "") for path in file_list]
+        file_list = [
+        {**item, "path": item["path"].replace(str(self.storage_directory), "")}
+        for item in file_list
+        ]
         return file_list
 
     def _get_all_files_metadata_recursive(self, directory_path, file_list):
