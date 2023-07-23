@@ -55,7 +55,7 @@ class MetadataDatabase:
         cursor.executemany(insert_data_query, data_to_insert)
         self.conn.commit()
 
-    def read(self):
+    def readall(self):
         cursor = self.conn.cursor()
         select_query = '''
         SELECT * FROM metadata
@@ -104,6 +104,53 @@ class MetadataDatabase:
 
             cursor.execute(update_query, updated_data_with_path)
         self.conn.commit()
+    
+    def get_uninserted_metadata(self, file_metadata_list):
+        cursor = self.conn.cursor()
+
+        uninserted_metadata = []
+
+        for item in file_metadata_list:
+            file_path = item['path']
+
+            select_query = '''
+            SELECT path FROM metadata WHERE path=?
+            '''
+            cursor.execute(select_query, (file_path,))
+            existing_path = cursor.fetchone()
+
+            if not existing_path:
+                uninserted_metadata.append(item)
+
+        return uninserted_metadata
+
+    def get_changed_metadata(self, file_metadata_list):
+        cursor = self.conn.cursor()
+        changed_metadata = []
+        for current_item in file_metadata_list:
+            file_path = current_item['path']
+
+            select_query = '''
+            SELECT * FROM metadata WHERE path=?
+            '''
+
+            cursor.execute(select_query,(file_path,))
+            db_item = cursor.fetchone()
+            if not db_item:
+                # If the item is not found in the database, consider it as changed
+                changed_metadata.append(current_item)
+            else:
+                column_names = [column[0] for column in cursor.description]
+                db_item_dict = dict(zip(column_names, db_item))
+                for key in current_item.keys():
+                    if current_item[key] != db_item_dict[key]:
+                        # If any attribute is different, consider it as changed
+                        changed_metadata.append(current_item)
+                        break  # Break the loop if any difference is found
+        return changed_metadata
+
+            
+
 
     def close_connection(self):
         self.conn.close()
