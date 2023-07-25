@@ -13,21 +13,6 @@ from .serializers import FileMetaDataSerializer, FileSerializer
 from .models import FileMetaData
 
 
-# @login_required
-def getdir(request):
-    current_dir = os.getcwd()
-    parent_dir = os.path.dirname(current_dir)
-    target_dir = os.path.join(parent_dir, "cloud_storage")
-    list = []
-    if os.path.exists(target_dir):
-        list = files_handler.get_all_files_dirs(target_dir)
-    else:
-        # Handle the case when the target directory doesn't exist
-        pass
-    context = {"list": list}
-    return JsonResponse(context)
-
-
 class CheckMetaDataView(APIView):
     authentication_classes = [
         authentication.SessionAuthentication,
@@ -40,10 +25,8 @@ class CheckMetaDataView(APIView):
     def get(self, request):
         # Assuming the user is authenticated, you can get the current user instance
         current_user = request.user
-        print(current_user)
         # Fetch all metadata objects related to the current user from the database
         metadata_objects = FileMetaData.objects.filter(owner=current_user)
-        print(metadata_objects)
         # Serialize the metadata objects
         serializer = FileMetaDataSerializer(metadata_objects, many=True)
 
@@ -73,6 +56,8 @@ class FileView(APIView):
         file_serializer = FileSerializer(data=file_data)
         metadata_serializer = FileMetaDataSerializer(data=json_data)
         if file_serializer.is_valid() and metadata_serializer.is_valid():
+            if FileMetaData.objects.filter(path=metadata_serializer.validated_data["path"],owner=request.user):
+                return Response({"message" : f'ERROR: file \'{metadata_serializer.validated_data["path"]}\' already exists!!'})
             storage_folder_path = os.path.abspath(
                 os.path.join(__file__, "..", "..", "..", "cloud_storage")
             )
@@ -85,10 +70,59 @@ class FileView(APIView):
             with open(file_path, "wb+") as destination_file:
                 for chunk in file_data["file"].chunks():
                     destination_file.write(chunk)
-
+            metadata_serializer.validated_data["owner"] = request.user
             metadata_serializer.save()
+            content = {
+                "message": f'File \'{metadata_serializer.validated_data["path"]}\' uploaded successfully.',
+                "metadata" : json_data,
+            }
             return Response(
-                {"message": "File and metadata uploaded successfully."},
+                content,
+                status=status.HTTP_201_CREATED,
+            )
+        return Response(
+            {"message" : metadata_serializer.error_messages}, status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    def put(self, request, format=None):
+        # get the file and remove it from the request
+        file_data = {"file": request.data.get("file")}
+        request.data.pop("file", None)
+        # store the metadata and add the owner & updated_at fields
+        json_data = request.data
+        json_data.update(
+            {"owner": str(request.user), "updated_at": datetime.utcnow().isoformat()}
+        )
+        try:
+            old_file_metadata = FileMetaData.objects.get(path=request.data["path"],owner=request.user)
+        except FileMetaData.DoesNotExist:
+            return Response({"error": "File metadata not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        file_serializer = FileSerializer(data=file_data)
+        metadata_serializer = FileMetaDataSerializer(old_file_metadata,data=json_data)
+        if file_serializer.is_valid() and metadata_serializer.is_valid():
+            storage_folder_path = os.path.abspath(
+                os.path.join(__file__, "..", "..", "..", "cloud_storage")
+            )
+            file_path = os.path.join(
+                storage_folder_path, metadata_serializer.validated_data["owner"]
+            )
+            file_path = file_path + str(metadata_serializer.validated_data["path"])
+            dir_path = os.path.dirname(file_path)
+            os.makedirs(dir_path, exist_ok=True)
+            with open(file_path, "wb+") as destination_file:
+                for chunk in file_data["file"].chunks():
+                    destination_file.write(chunk)
+            metadata_serializer.validated_data["owner"] = request.user
+            metadata_serializer.save()
+            metadata = metadata_serializer.validated_data
+            metadata.pop("owner", None)
+            content = {
+                "message": f'File \'{metadata_serializer.validated_data["path"]}\' updated successfully.',
+                "metadata" : metadata,
+            }
+            return Response(
+                content,
                 status=status.HTTP_201_CREATED,
             )
         return Response(
