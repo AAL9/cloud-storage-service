@@ -11,9 +11,10 @@ class FileMetaDataSerializer(serializers.ModelSerializer):
     )  # Add a write-only field for owner name
     created_at = serializers.ReadOnlyField()
     updated_at = serializers.ReadOnlyField()
+    id = serializers.ReadOnlyField()
     class Meta:
         model = FileMetaData
-        fields = ["owner", "name", "created_at", "updated_at", "hash", "path", "size"]
+        fields = ["id","owner", "name", "created_at", "updated_at", "hash", "path", "size"]
 
 
 class FileSerializer(serializers.Serializer):

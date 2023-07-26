@@ -10,7 +10,7 @@ class MetadataDatabase:
         cursor = self.conn.cursor()
         create_table_query = """
         CREATE TABLE IF NOT EXISTS metadata (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id INTEGER PRIMARY KEY,
             name TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             hash TEXT NOT NULL,
@@ -21,12 +21,15 @@ class MetadataDatabase:
         cursor.execute(create_table_query)
 
     def validate_data(self, data):
-        required_keys = ["name", "hash", "path", "size"]
+        required_keys = ["id","name", "hash", "path", "size"]
         for entry in data:
             for key in required_keys:
                 if key not in entry:
                     raise ValueError(f"Missing required key '{key}' in metadata entry")
 
+            if not isinstance(entry["id",int]):
+                raise ValueError("The 'id' value should be integer")
+            
             if not isinstance(entry["name"], str):
                 raise ValueError("The 'name' value should be a string")
 
@@ -45,13 +48,14 @@ class MetadataDatabase:
     def insert(self, file_metadata):
         cursor = self.conn.cursor()
         insert_data_query = """
-        INSERT INTO metadata (name, updated_at, hash, path, size) VALUES (?, ?, ?, ?, ?)
+        INSERT INTO metadata (id, name, updated_at, hash, path, size) VALUES (?, ?, ?, ?, ?, ?)
         """
         data_to_insert = []
 
         for item in file_metadata:
             data_to_insert.append(
                 (
+                    item["id"],
                     item["name"],
                     item["updated_at"],
                     item["hash"],
@@ -71,7 +75,7 @@ class MetadataDatabase:
         cursor.execute(select_query, (file_path,))
         column_names = [column[0] for column in cursor.description]
         metadata = cursor.fetchone()
-        metadata = dict(zip(column_names[1:], metadata[1:]))
+        metadata = dict(zip(column_names, metadata))
         return metadata
 
     def readall(self):
@@ -84,7 +88,7 @@ class MetadataDatabase:
         rows = cursor.fetchall()
         data_list = []
         for row in rows:
-            data_dict = dict(zip(column_names[1:], row[1:]))
+            data_dict = dict(zip(column_names, row))
             data_list.append(data_dict)
         return data_list
 
@@ -110,7 +114,7 @@ class MetadataDatabase:
         for updated_data in updated_data_list:
             file_path = updated_data["path"]
             select_query = """
-            SELECT updated_at, name, hash, size FROM metadata WHERE path=?
+            SELECT id, updated_at, name, hash, size FROM metadata WHERE path=?
             """
             cursor.execute(select_query, (file_path,))
             existing_data = cursor.fetchone()
@@ -119,21 +123,23 @@ class MetadataDatabase:
                 raise ValueError(f"Metadata not found for path: {file_path}")
 
             (
+                existing_id,
                 existing_updated_at,
                 existing_name,
                 existing_hash,
                 existing_size,
             ) = existing_data
-
+            updated_id = updated_data.get("id", existing_id)
             updated_name = updated_data.get("name", existing_name)
             updated_hash = updated_data.get("hash", existing_hash)
             updated_size = updated_data.get("size", existing_size)
             updated_updated_at = updated_data.get("updated_at", existing_updated_at)
 
             update_query = """
-            UPDATE metadata SET name=?, updated_at=?, hash=?, size=? WHERE path=?
+            UPDATE metadata SET id=?, name=?, updated_at=?, hash=?, size=? WHERE path=?
             """
             updated_data_with_path = (
+                updated_id,
                 updated_name,
                 updated_updated_at,
                 updated_hash,
@@ -178,6 +184,7 @@ class MetadataDatabase:
             if db_item:
                 column_names = [column[0] for column in cursor.description]
                 db_item_dict = dict(zip(column_names, db_item))
+                current_item.update({"id": db_item_dict["id"]}) # add the id value to the file metadata.
                 for key in current_item.keys():
                     if current_item[key] != db_item_dict[key]:
                         # If any attribute is different, consider it as changed
