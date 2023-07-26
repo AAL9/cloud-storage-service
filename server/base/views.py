@@ -23,13 +23,9 @@ class CheckMetaDataView(APIView):
     ]
 
     def get(self, request):
-        # Assuming the user is authenticated, you can get the current user instance
         current_user = request.user
-        # Fetch all metadata objects related to the current user from the database
         metadata_objects = FileMetaData.objects.filter(owner=current_user)
-        # Serialize the metadata objects
         serializer = FileMetaDataSerializer(metadata_objects, many=True)
-
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -51,13 +47,19 @@ class FileView(APIView):
         # store the metadata and add the owner & updated_at fields
         json_data = request.data
         json_data.update(
-            {"owner": str(request.user), "updated_at": datetime.utcnow().isoformat()}
+            {"owner": str(request.user)}
         )
         file_serializer = FileSerializer(data=file_data)
         metadata_serializer = FileMetaDataSerializer(data=json_data)
         if file_serializer.is_valid() and metadata_serializer.is_valid():
-            if FileMetaData.objects.filter(path=metadata_serializer.validated_data["path"],owner=request.user):
-                return Response({"message" : f'ERROR: file \'{metadata_serializer.validated_data["path"]}\' already exists!!'})
+            if FileMetaData.objects.filter(
+                path=metadata_serializer.validated_data["path"], owner=request.user
+            ):
+                return Response(
+                    {
+                        "message": f'ERROR: file \'{metadata_serializer.validated_data["path"]}\' already exists!!'
+                    }
+                )
             storage_folder_path = os.path.abspath(
                 os.path.join(__file__, "..", "..", "..", "cloud_storage")
             )
@@ -74,16 +76,16 @@ class FileView(APIView):
             metadata_serializer.save()
             content = {
                 "message": f'File \'{metadata_serializer.validated_data["path"]}\' uploaded successfully.',
-                "metadata" : json_data,
+                "metadata": metadata_serializer.data,
             }
             return Response(
                 content,
                 status=status.HTTP_201_CREATED,
             )
         return Response(
-            {"message" : metadata_serializer.error_messages}, status=status.HTTP_400_BAD_REQUEST
+            {"message": metadata_serializer.errors}, status=status.HTTP_400_BAD_REQUEST
         )
-    
+
     def put(self, request, format=None):
         # get the file and remove it from the request
         file_data = {"file": request.data.get("file")}
@@ -91,15 +93,19 @@ class FileView(APIView):
         # store the metadata and add the owner & updated_at fields
         json_data = request.data
         json_data.update(
-            {"owner": str(request.user), "updated_at": datetime.utcnow().isoformat()}
+            {"owner": str(request.user)}
         )
         try:
-            old_file_metadata = FileMetaData.objects.get(path=request.data["path"],owner=request.user)
+            old_file_metadata = FileMetaData.objects.get(
+                path=request.data["path"], owner=request.user
+            )
         except FileMetaData.DoesNotExist:
-            return Response({"error": "File metadata not found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": "File metadata not found."}, status=status.HTTP_404_NOT_FOUND
+            )
 
         file_serializer = FileSerializer(data=file_data)
-        metadata_serializer = FileMetaDataSerializer(old_file_metadata,data=json_data)
+        metadata_serializer = FileMetaDataSerializer(old_file_metadata, data=json_data)
         if file_serializer.is_valid() and metadata_serializer.is_valid():
             storage_folder_path = os.path.abspath(
                 os.path.join(__file__, "..", "..", "..", "cloud_storage")
@@ -115,16 +121,14 @@ class FileView(APIView):
                     destination_file.write(chunk)
             metadata_serializer.validated_data["owner"] = request.user
             metadata_serializer.save()
-            metadata = metadata_serializer.validated_data
-            metadata.pop("owner", None)
             content = {
                 "message": f'File \'{metadata_serializer.validated_data["path"]}\' updated successfully.',
-                "metadata" : metadata,
+                "metadata": metadata_serializer.data,
             }
             return Response(
                 content,
                 status=status.HTTP_201_CREATED,
             )
         return Response(
-            metadata_serializer.error_messages, status=status.HTTP_400_BAD_REQUEST
+            metadata_serializer.errors, status=status.HTTP_400_BAD_REQUEST
         )

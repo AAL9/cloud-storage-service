@@ -51,7 +51,13 @@ class MetadataDatabase:
 
         for item in file_metadata:
             data_to_insert.append(
-                (item["name"], item["updated_at"], item["hash"], item["path"], item["size"])
+                (
+                    item["name"],
+                    item["updated_at"],
+                    item["hash"],
+                    item["path"],
+                    item["size"],
+                )
             )
 
         cursor.executemany(insert_data_query, data_to_insert)
@@ -87,11 +93,11 @@ class MetadataDatabase:
         delete_query = """
         DELETE FROM metadata WHERE path=?
         """
-        if isinstance(deleted_data_list,dict):
-                file_path = deleted_data_list["path"]
-                cursor.execute(delete_query, (file_path,))
-                self.conn.commit()
-        elif isinstance(deleted_data_list,list):
+        if isinstance(deleted_data_list, dict):
+            file_path = deleted_data_list["path"]
+            cursor.execute(delete_query, (file_path,))
+            self.conn.commit()
+        elif isinstance(deleted_data_list, list):
             for deleted_data in deleted_data_list:
                 file_path = deleted_data["path"]
                 cursor.execute(delete_query, (file_path,))
@@ -138,7 +144,7 @@ class MetadataDatabase:
             cursor.execute(update_query, updated_data_with_path)
         self.conn.commit()
 
-    def get_uninserted_metadata(self, file_metadata_list):
+    def get_new_metadata(self, file_metadata_list):
         cursor = self.conn.cursor()
 
         uninserted_metadata = []
