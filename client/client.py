@@ -1,5 +1,4 @@
 from pathlib import Path
-import os
 import requests
 import time
 from decouple import config
@@ -19,14 +18,19 @@ USER_PASSWORD = config("USER_PASSWORD")
 
 # the base URL
 BASE_URL = config("BASE_URL")
-# paths
+# urls
 token_url = BASE_URL + "auth/"
 check_metadata_url = BASE_URL + "check/"
 file_url = BASE_URL + "file/"
 
-#
-current_directory = Path(__file__).resolve().parent
-storage_folder_path = current_directory / STORAGE_FOLDER_NAME
+# the storage folder full path
+storage_folder_path = Path(__file__).resolve().parent / STORAGE_FOLDER_NAME
+
+# Database connection
+db = MetadataDatabase(f"{STORAGE_FOLDER_NAME}.db")
+
+# files handler
+fh = FilesHandler(storage_folder_path)
 
 
 def main():
@@ -34,48 +38,9 @@ def main():
     token = (
         get_token()
     )  # get the authentication token and use it in every request to the server.
-    get_metadata(token)
-    fh = FilesHandler(storage_folder_path)
-    current_metadata = fh.get_all_files_metadata()
-    db = MetadataDatabase(
-        f"{STORAGE_FOLDER_NAME}.db"
-    )  # establish a conncetion to the database.
-    uninserted_metadata = db.get_uninserted_metadata(current_metadata)
-    print("ADDITIONS MADE DURING PROGRAM OFF:")
-    for item in uninserted_metadata:
-        for key, value in item.items():
-            print(f'"{key}" : "{value}",')
-        print("------------------------------------------------------------------------------")
-    changed_metadata = db.get_changed_metadata(current_metadata)
-    print("MODIFICATIONS MADE DURING PROGRAM OFF:")
-    for item in changed_metadata:
-        for key, value in item.items():
-            print(f'"{key}" : "{value}",')
-        print("------------------------------------------------------------------------------")
-    removed_metadata = db.get_removed_metadata(current_metadata)
-    print("REMOVED FILES DURING PROGRAM OFF:")
-    for item in removed_metadata:
-        for key, value in item.items():
-            print(f'"{key}" : "{value}",')
-        print("------------------------------------------------------------------------------")
-    db.delete(removed_metadata)
-    #db.insert(uninserted_metadata)
-    #db.update(changed_metadata)
-    #db.update(current_metadata)
-    
+    server_metadata = get_server_metadata(token)
     readall_db = db.readall()
-    hello = current_metadata
-    print("DATABASE:")
-    for item in readall_db:
-        for key, value in item.items():
-            print(f'"{key}" : "{value}",')
-        print("------------------------------------------------------------------------------")
-    #create_files(token,hello,db)
-    update_files(token, changed_metadata, db)
-
     db.close_connection()  # close the conncetion to the database.
-
-    # watch_directory(storage_folder_path)
 
 
 def check_storage_folder_exists():
@@ -97,18 +62,30 @@ def get_token():
     return token
 
 
-def get_metadata(token):
+def get_server_metadata(token):
     headers = {"Authorization": f"Token {token}"}
     response = requests.get(check_metadata_url, headers=headers)
-    items = response.json()
-    print("ITEMS IN SERVER:")
-    for item in items:
-        for key, value in item.items():
-            print(f'"{key}" : "{value}",')
-        print("------------------------------------------------------------------------------\n")
+    server_metadata = response.json()
+    return server_metadata
 
 
-def create_files(token, files_metadata_list, db):
+def get_conflicted_changes(server_metadata_list):
+    conflicted_metadata_list = []
+    current_metadata = fh.get_all_files_metadata()
+    changed_metadata_list = db.get_changed_metadata(current_metadata)
+    for changed_metadata in changed_metadata_list:
+        for server_metadata in server_metadata_list:
+            if server_metadata.get("path") == changed_metadata["path"]:
+                changed_metadata_from_db = db.read(changed_metadata["path"])
+                for key in changed_metadata.keys():
+                    if changed_metadata_from_db[key] != server_metadata[key]:
+                        # If any attribute is different, consider it as changed
+                        conflicted_metadata_list.append(changed_metadata)
+                        break  # Break the loop if any difference is found
+    return conflicted_metadata_list
+
+
+def create_files(token, files_metadata_list):
     new_metadata = []
     print("UPLOADING NEW FILES...")
     for file_metadata in files_metadata_list:
@@ -129,10 +106,9 @@ def create_files(token, files_metadata_list, db):
         print("STATUS:", response.json().get("message"), "|", response.status_code)
     if new_metadata:
         db.insert(new_metadata)
-        
 
 
-def update_files(token, files_metadata_list, db):
+def update_files(token, files_metadata_list):
     updated_metadata = []
     print("UPLOADING CHANGES...")
     for file_metadata in files_metadata_list:
@@ -153,22 +129,6 @@ def update_files(token, files_metadata_list, db):
         print("STATUS:", response.json().get("message"), "|", response.status_code)
     if updated_metadata:
         db.update(updated_metadata)
-        
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 class Watcher(FileSystemEventHandler):
