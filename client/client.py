@@ -40,7 +40,13 @@ def main():
     )  # get the authentication token and use it in every request to the server.
     server_metadata = get_server_metadata(token)
     readall_db = db.readall()
+    current_metadata = fh.get_all_files_metadata()
+    update_files(token,current_metadata)
+    deleted_files = db.get_removed_metadata(current_metadata)
+    print(deleted_files)
+    delete_files(token, deleted_files)
     db.close_connection()  # close the conncetion to the database.
+    
 
 
 def check_storage_folder_exists():
@@ -130,6 +136,18 @@ def update_files(token, files_metadata_list):
     if updated_metadata:
         db.update(updated_metadata)
 
+def delete_files(token, files_metadata_list):
+    print("DELETING FILES...")
+    for file_metadata in files_metadata_list:
+        headers = {"Authorization": f"Token {token}"}
+        json = {
+            "name": file_metadata["name"],
+            "size": file_metadata["size"],
+            "hash": file_metadata["hash"],
+            "path": file_metadata["path"],
+        }
+        response = requests.delete(file_url, headers=headers, data=json)
+        print("STATUS:", response.json().get("message"), "|", response.status_code)
 
 class Watcher(FileSystemEventHandler):
     def on_modified(self, event):
