@@ -6,5 +6,8 @@ from . import views
 urlpatterns = [
     path("auth/", obtain_auth_token, name="auth"),
     path("check/", views.CheckMetaDataView.as_view(), name="check_files_metadata"),
-    path("file/", views.FileView.as_view(), name="upload_download_files"),
+    path("file/", views.FileView.as_view(), name="upload_files"),
+    path(
+        "file/<int:pk>/", views.FileView.as_view(), name="download_update_delete_files"
+    ),
 ]

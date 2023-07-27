@@ -1,12 +1,9 @@
-from django.http import JsonResponse
-
 from rest_framework import permissions, authentication, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser
 
 import os
-from datetime import datetime
 
 from . import files_handler
 from .serializers import FileMetaDataSerializer, FileSerializer
@@ -46,9 +43,7 @@ class FileView(APIView):
         request.data.pop("file", None)
         # store the metadata and add the owner & updated_at fields
         json_data = request.data
-        json_data.update(
-            {"owner": str(request.user)}
-        )
+        json_data.update({"owner": str(request.user)})
         file_serializer = FileSerializer(data=file_data)
         metadata_serializer = FileMetaDataSerializer(data=json_data)
         if file_serializer.is_valid() and metadata_serializer.is_valid():
@@ -60,18 +55,11 @@ class FileView(APIView):
                         "message": f'ERROR: file \'{metadata_serializer.validated_data["path"]}\' already exists!!'
                     }
                 )
-            storage_folder_path = os.path.abspath(
-                os.path.join(__file__, "..", "..", "..", "cloud_storage")
+            files_handler.upload_file(
+                owner=str(request.user),
+                path=str(metadata_serializer.validated_data["path"]),
+                file=file_data["file"],
             )
-            file_path = os.path.join(
-                storage_folder_path, metadata_serializer.validated_data["owner"]
-            )
-            file_path = file_path + str(metadata_serializer.validated_data["path"])
-            dir_path = os.path.dirname(file_path)
-            os.makedirs(dir_path, exist_ok=True)
-            with open(file_path, "wb+") as destination_file:
-                for chunk in file_data["file"].chunks():
-                    destination_file.write(chunk)
             metadata_serializer.validated_data["owner"] = request.user
             metadata_serializer.save()
             content = {
@@ -86,39 +74,28 @@ class FileView(APIView):
             {"message": metadata_serializer.errors}, status=status.HTTP_400_BAD_REQUEST
         )
 
-    def put(self, request, format=None):
+    def put(self, request, pk, format=None):
         # get the file and remove it from the request
         file_data = {"file": request.data.get("file")}
         request.data.pop("file", None)
         # store the metadata and add the owner & updated_at fields
         json_data = request.data
-        json_data.update(
-            {"owner": str(request.user)}
-        )
+        json_data.update({"owner": str(request.user)})
         try:
-            old_file_metadata = FileMetaData.objects.get(
-                path=request.data["path"], owner=request.user
-            )
+            old_file_metadata = FileMetaData.objects.get(pk=pk, owner=request.user)
         except FileMetaData.DoesNotExist:
             return Response(
-                {"error": "File metadata not found."}, status=status.HTTP_404_NOT_FOUND
+                {"error": "File not found."}, status=status.HTTP_404_NOT_FOUND
             )
 
         file_serializer = FileSerializer(data=file_data)
         metadata_serializer = FileMetaDataSerializer(old_file_metadata, data=json_data)
         if file_serializer.is_valid() and metadata_serializer.is_valid():
-            storage_folder_path = os.path.abspath(
-                os.path.join(__file__, "..", "..", "..", "cloud_storage")
+            files_handler.update_file(
+                owner=str(request.user),
+                path=str(metadata_serializer.validated_data["path"]),
+                file=file_data["file"],
             )
-            file_path = os.path.join(
-                storage_folder_path, metadata_serializer.validated_data["owner"]
-            )
-            file_path = file_path + str(metadata_serializer.validated_data["path"])
-            dir_path = os.path.dirname(file_path)
-            os.makedirs(dir_path, exist_ok=True)
-            with open(file_path, "wb+") as destination_file:
-                for chunk in file_data["file"].chunks():
-                    destination_file.write(chunk)
             metadata_serializer.validated_data["owner"] = request.user
             metadata_serializer.save()
             content = {
@@ -129,6 +106,17 @@ class FileView(APIView):
                 content,
                 status=status.HTTP_201_CREATED,
             )
-        return Response(
-            metadata_serializer.errors, status=status.HTTP_400_BAD_REQUEST
+        return Response(metadata_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk, format=None):
+        try:
+            file_metadata = FileMetaData.objects.get(pk=pk, owner=request.user)
+        except FileMetaData.DoesNotExist:
+            return Response(
+                {"error": "File not found."}, status=status.HTTP_404_NOT_FOUND
+            )
+        message = files_handler.delete_file(
+            owner=str(request.user), path=str(file_metadata.path)
         )
+        file_metadata.delete()
+        return Response({"message": message}, status=status.HTTP_200_OK)
