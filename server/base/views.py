@@ -1,3 +1,5 @@
+from django.http import FileResponse
+
 from rest_framework import permissions, authentication, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -36,6 +38,20 @@ class FileView(APIView):
     permission_classes = [
         permissions.IsAuthenticated,
     ]
+
+    def get(self, request, pk, format=None):
+        try:
+            file_metadata = FileMetaData.objects.get(pk=pk, owner=request.user)
+        except FileMetaData.DoesNotExist:
+            return Response(
+                {"error": "File not found."}, status=status.HTTP_404_NOT_FOUND
+            )
+        file = files_handler.get_file_path(
+            owner=str(request.user), path=str(file_metadata.path)
+        )
+
+        return FileResponse(open(file, "rb"))
+    
 
     def post(self, request, format=None):
         # get the file and remove it from the request

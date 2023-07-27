@@ -40,8 +40,10 @@ def main():
     )  # get the authentication token and use it in every request to the server.
     server_metadata = get_server_metadata(token)
     current_metadata = fh.get_all_files_metadata()
-    create_files(token, current_metadata)
-    delete_files(token, db.readall())
+    #create_files(token, current_metadata)
+    #update_files(token,db.readall())
+    #delete_files(token, db.readall())
+    #get_files(token ,db.readall())
     db.close_connection()  # close the conncetion to the database.
 
 
@@ -85,6 +87,23 @@ def get_conflicted_changes(server_metadata_list):
                         conflicted_metadata_list.append(changed_metadata)
                         break  # Break the loop if any difference is found
     return conflicted_metadata_list
+
+
+def get_files(token, files_metadata_list):
+    print("GETTING FILES...")
+    for file_metadata in files_metadata_list:
+        headers = {"Authorization": f"Token {token}"}
+        response = requests.get(
+            file_url + str(file_metadata["id"]) + "/", headers=headers
+        )
+        file_path = str(storage_folder_path) + file_metadata["path"]
+        dir_path = Path(file_path).parent
+        if not dir_path.exists():
+            dir_path.mkdir(parents=True)
+        with open(file_path, "wb+") as destination_file:
+            destination_file.write(response.content)
+        print("STATUS:", file_metadata["path"], "|", response.status_code)
+
 
 
 def create_files(token, files_metadata_list):
