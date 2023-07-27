@@ -21,15 +21,15 @@ class MetadataDatabase:
         cursor.execute(create_table_query)
 
     def validate_data(self, data):
-        required_keys = ["id","name", "hash", "path", "size"]
+        required_keys = ["id", "name", "hash", "path", "size"]
         for entry in data:
             for key in required_keys:
                 if key not in entry:
                     raise ValueError(f"Missing required key '{key}' in metadata entry")
 
-            if not isinstance(entry["id",int]):
+            if not isinstance(entry["id", int]):
                 raise ValueError("The 'id' value should be integer")
-            
+
             if not isinstance(entry["name"], str):
                 raise ValueError("The 'name' value should be a string")
 
@@ -184,7 +184,9 @@ class MetadataDatabase:
             if db_item:
                 column_names = [column[0] for column in cursor.description]
                 db_item_dict = dict(zip(column_names, db_item))
-                current_item.update({"id": db_item_dict["id"]}) # add the id value to the file metadata.
+                current_item.update(
+                    {"id": db_item_dict["id"]}
+                )  # add the id value to the file metadata.
                 for key in current_item.keys():
                     if current_item[key] != db_item_dict[key]:
                         # If any attribute is different, consider it as changed
