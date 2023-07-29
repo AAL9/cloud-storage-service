@@ -46,3 +46,15 @@ class FilesHandler:
         file_hash = hash_obj.hexdigest()
 
         return file_hash
+
+    def delete_file(self, file_path: str):
+        full_path = str(self.storage_directory) + file_path
+        try:
+            os.remove(full_path)
+            return f"File '{full_path}' has been deleted successfully."
+        except FileNotFoundError:
+            return f"File '{full_path}' not found. Unable to delete."
+        except PermissionError:
+            return f"Permission denied. Unable to delete file '{full_path}'."
+        except Exception as e:
+            return f"An error occurred while deleting file '{full_path}': {str(e)}"
