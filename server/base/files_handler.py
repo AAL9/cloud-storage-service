@@ -61,5 +61,5 @@ def delete_file(owner: str, path: str):
         message = f"Permission denied. Unable to delete file '{path}'."
         return message
     except Exception as e:
-        message = f"An error occurred while deleting file '{file_path}': {str(e)}"
+        message = f"An error occurred while deleting file '{path}': {str(e)}"
         return message
