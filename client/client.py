@@ -22,6 +22,7 @@ def main():
     # api.get_server_files(db.readall())
     #delete_locally_deleted_files_from_server(token)
     #delete_from_local_deleted_files_on_server(token)
+    send_locally_updated_files_to_server()
     db.close_connection()  # close the conncetion to the database.
 
 
@@ -61,18 +62,53 @@ def get_conflicted_changes(server_metadata_list):
     return conflicted_metadata_list
 
 
-def upload_locally_new_files_to_server(token):
+def send_locally_updated_files_to_server():
     current_metadata = fh.get_all_files_metadata()
-    new_metadata = db.get_new_metadata(current_metadata)
+    locally_changed_metadata = db.get_changed_metadata(current_metadata)
+    conflicted_changes = get_conflicted_changes(api.get_server_metadata())
+    if conflicted_changes:
+        print(f'ALERT: you have "{len(conflicted_changes)}" conflicted changes!\n You need to resolve these conflicts!')
+        update_list = []
+        get_list = []
+        for conflict_item in conflicted_changes:
+            print(f'choose an action to resolve conflict in "{conflict_item["path"]}":')
+            print("[1] force local change on the server.")
+            print("[2] discard local changes and get latest server update.")
+            print("[3] get latest server version and resolve conflict manually. (NOTE: before choosing this option, you need to have a copy of the file contains the local changes outside the storage folder)")
+            
+            valid_choices = {"1", "2", "3"}
+            choice = None
+
+            while choice not in valid_choices:
+                choice = input("CHOOSE:")
+
+            if choice == "1":
+                update_list.append(conflict_item)
+            elif choice == "2":
+                get_list.append(conflict_item)
+            elif choice == "3":
+                get_list.append(conflict_item)
+            else:
+                raise ValueError("Invalid choice. Please choose 1, 2, or 3.")
+        if get_list:
+            print("get list:",get_list)
+            #api.get_server_files(get_list)
+        if update_list:
+            print("update list", update_list)
+            #api.update_server_files(update_list)
+    else:
+        print("updated this:",locally_changed_metadata)
+        #api.update_server_files(locally_changed_metadata)
+        pass
 
 
-def delete_locally_deleted_files_from_server(token):
+def delete_locally_deleted_files_from_server():
     current_metadata = fh.get_all_files_metadata()
     deleted_locally = db.get_removed_metadata(current_metadata)
     api.delete_server_files(deleted_locally)
 
 
-def delete_from_local_deleted_files_on_server(token):
+def delete_from_local_deleted_files_on_server():
     server_metadata = api.get_server_metadata()
     deleted_on_server = db.get_removed_metadata(server_metadata)
     for item in deleted_on_server:
