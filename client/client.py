@@ -8,42 +8,20 @@ from watchdog.events import FileSystemEventHandler
 
 from program.db_handler import MetadataDatabase
 from program.files_handler import FilesHandler
-
-# assign the storage folder
-STORAGE_FOLDER_NAME = config("STORAGE_FOLDER_NAME")
-
-# login information
-USER_NAME = config("USER_NAME")
-USER_PASSWORD = config("USER_PASSWORD")
-
-# the base URL
-BASE_URL = config("BASE_URL")
-# urls
-token_url = BASE_URL + "auth/"
-check_metadata_url = BASE_URL + "check/"
-file_url = BASE_URL + "file/"
-
-# the storage folder full path
-storage_folder_path = Path(__file__).resolve().parent / STORAGE_FOLDER_NAME
-
-# Database connection
-db = MetadataDatabase(f"{STORAGE_FOLDER_NAME}.db")
-
-# files handler
-fh = FilesHandler(storage_folder_path)
+from program.api import ServerApi
 
 
 def main():
     check_storage_folder_exists()
-    token = (
-        get_token()
-    )  # get the authentication token and use it in every request to the server.
-    server_metadata = get_server_metadata(token)
+    # get the authentication token and use it in every request to the server.
+    server_metadata = api.get_server_metadata()
     current_metadata = fh.get_all_files_metadata()
-    #create_files(token, current_metadata)
-    #update_files(token,db.readall())
-    #delete_files(token, db.readall())
-    #get_files(token ,db.readall())
+    # api.upload_new_files(current_metadata)
+    # api.update_server_files(db.readall())
+    # api.delete_server_files(db.readall())
+    # api.get_server_files(db.readall())
+    #delete_locally_deleted_files_from_server(token)
+    #delete_from_local_deleted_files_on_server(token)
     db.close_connection()  # close the conncetion to the database.
 
 
@@ -63,14 +41,8 @@ def get_token():
         },
     )
     token = response.json().get("token")
+    print("Successful authentication!")
     return token
-
-
-def get_server_metadata(token):
-    headers = {"Authorization": f"Token {token}"}
-    response = requests.get(check_metadata_url, headers=headers)
-    server_metadata = response.json()
-    return server_metadata
 
 
 def get_conflicted_changes(server_metadata_list):
@@ -89,82 +61,24 @@ def get_conflicted_changes(server_metadata_list):
     return conflicted_metadata_list
 
 
-def get_files(token, files_metadata_list):
-    print("GETTING FILES...")
-    for file_metadata in files_metadata_list:
-        headers = {"Authorization": f"Token {token}"}
-        response = requests.get(
-            file_url + str(file_metadata["id"]) + "/", headers=headers
-        )
-        file_path = str(storage_folder_path) + file_metadata["path"]
-        dir_path = Path(file_path).parent
-        if not dir_path.exists():
-            dir_path.mkdir(parents=True)
-        with open(file_path, "wb+") as destination_file:
-            destination_file.write(response.content)
-        print("STATUS:", file_metadata["path"], "|", response.status_code)
+def upload_locally_new_files_to_server(token):
+    current_metadata = fh.get_all_files_metadata()
+    new_metadata = db.get_new_metadata(current_metadata)
 
 
-
-def create_files(token, files_metadata_list):
-    new_metadata = []
-    print("UPLOADING NEW FILES...")
-    for file_metadata in files_metadata_list:
-        file_path = str(storage_folder_path) + file_metadata["path"]
-        headers = {"Authorization": f"Token {token}"}
-        json = {
-            "name": file_metadata["name"],
-            "size": file_metadata["size"],
-            "hash": file_metadata["hash"],
-            "path": file_metadata["path"],
-        }
-        with open(file_path, "rb") as file:
-            files = {"file": file}
-            response = requests.post(file_url, headers=headers, data=json, files=files)
-        metadata = response.json().get("metadata") or None
-        if metadata:
-            new_metadata.append(metadata)
-        print("STATUS:", response.json().get("message"), "|", response.status_code)
-    if new_metadata:
-        db.insert(new_metadata)
+def delete_locally_deleted_files_from_server(token):
+    current_metadata = fh.get_all_files_metadata()
+    deleted_locally = db.get_removed_metadata(current_metadata)
+    api.delete_server_files(deleted_locally)
 
 
-def update_files(token, files_metadata_list):
-    updated_metadata = []
-    print("UPLOADING CHANGES...")
-    for file_metadata in files_metadata_list:
-        file_path = str(storage_folder_path) + file_metadata["path"]
-        headers = {"Authorization": f"Token {token}"}
-        json = {
-            "name": file_metadata["name"],
-            "size": file_metadata["size"],
-            "hash": file_metadata["hash"],
-            "path": file_metadata["path"],
-        }
-        with open(file_path, "rb") as file:
-            files = {"file": file}
-            response = requests.put(
-                file_url + str(file_metadata["id"]) + "/",
-                headers=headers,
-                data=json,
-                files=files,
-            )
-        metadata = response.json().get("metadata") or None
-        if metadata:
-            updated_metadata.append(metadata)
-        print("STATUS:", response.json().get("message"), "|", response.status_code)
-    if updated_metadata:
-        db.update(updated_metadata)
-
-
-def delete_files(token, files_metadata_list):
-    print("DELETING FILES...")
-    for file_metadata in files_metadata_list:
-        headers = {"Authorization": f"Token {token}"}
-        response = requests.delete(
-            file_url + str(file_metadata["id"]) + "/", headers=headers
-        )
-        print("STATUS:", response.json().get("message"), "|", response.status_code)
+def delete_from_local_deleted_files_on_server(token):
+    server_metadata = api.get_server_metadata()
+    deleted_on_server = db.get_removed_metadata(server_metadata)
+    for item in deleted_on_server:
+        full_path = str(storage_folder_path) + item["path"]
+        message = fh.delete_file(full_path)
+        print(message)
 
 
 class Watcher(FileSystemEventHandler):
@@ -199,6 +113,32 @@ def watch_directory(directory_path):
         observer.stop()
     observer.join()
 
+
+# assign the storage folder
+STORAGE_FOLDER_NAME = config("STORAGE_FOLDER_NAME")
+
+# login information
+USER_NAME = config("USER_NAME")
+USER_PASSWORD = config("USER_PASSWORD")
+
+# the base URL
+BASE_URL = config("BASE_URL")
+# urls
+token_url = BASE_URL + "auth/"
+check_metadata_url = BASE_URL + "check/"
+file_url = BASE_URL + "file/"
+token = get_token()
+# the storage folder full path
+storage_folder_path = Path(__file__).resolve().parent / STORAGE_FOLDER_NAME
+
+# Database connection
+db = MetadataDatabase(f"{STORAGE_FOLDER_NAME}.db")
+
+# files handler
+fh = FilesHandler(storage_folder_path)
+
+# api
+api = ServerApi(token=token, storage_folder_path=storage_folder_path, base_url=BASE_URL,db=db)
 
 if __name__ == "__main__":
     main()
