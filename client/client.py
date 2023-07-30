@@ -13,16 +13,33 @@ from program.api import ServerApi
 
 def main():
     check_storage_folder_exists()
-    # get the authentication token and use it in every request to the server.
-    server_metadata = api.get_server_metadata()
-    current_metadata = fh.get_all_files_metadata()
-    # api.upload_new_files(current_metadata)
-    # api.update_server_files(db.readall())
-    # api.delete_server_files(db.readall())
-    # api.get_server_files(db.readall())
-    #delete_locally_deleted_files_from_server(token)
-    #delete_from_local_deleted_files_on_server(token)
-    send_locally_updated_files_to_server()
+    try:
+        while True:
+            time.sleep(1)
+            # delete any file that have been deleted on either sides, locally or on server.
+            delete_from_local_deleted_files_on_server()
+            delete_locally_deleted_files_from_server()
+
+            # get new files in the server
+            server_metadata = api.get_server_metadata()
+            new_server_metadata = db.get_new_metadata(server_metadata)
+            if new_server_metadata:
+                api.get_new_server_files(new_server_metadata)
+
+            # send new files
+            current_metadata = fh.get_all_files_metadata()
+            new_metadata = db.get_new_metadata(current_metadata)
+            if new_metadata:
+                api.upload_new_files(new_metadata)
+
+            # send the updates to the server
+            send_locally_updated_files_to_server()
+
+            # get latest changes happened on the server's files
+            get_changes_on_server()
+
+    except KeyboardInterrupt:
+        pass
     db.close_connection()  # close the conncetion to the database.
 
 
@@ -46,7 +63,8 @@ def get_token():
     return token
 
 
-def get_conflicted_changes(server_metadata_list):
+def get_conflicted_changes():
+    server_metadata_list = api.get_server_metadata()
     conflicted_metadata_list = []
     current_metadata = fh.get_all_files_metadata()
     changed_metadata_list = db.get_changed_metadata(current_metadata)
@@ -57,25 +75,47 @@ def get_conflicted_changes(server_metadata_list):
                 for key in changed_metadata.keys():
                     if changed_metadata_from_db[key] != server_metadata[key]:
                         # If any attribute is different, consider it as changed
-                        conflicted_metadata_list.append(changed_metadata)
+                        conflicted_metadata_list.append(server_metadata)
                         break  # Break the loop if any difference is found
     return conflicted_metadata_list
+
+
+def get_changes_on_server():
+    change_on_server_list = []
+    current_metadata_list = fh.get_all_files_metadata()
+    server_metadata_list = api.get_server_metadata()
+    for current_metadata in current_metadata_list:
+        for server_metadata in server_metadata_list:
+            if server_metadata.get("path") == current_metadata["path"]:
+                for key in current_metadata.keys():
+                    if current_metadata[key] != server_metadata[key]:
+                        metadata_from_db = db.read(current_metadata["path"])
+                        if metadata_from_db[key] == current_metadata[key]:
+                            change_on_server_list.append(server_metadata)
+                            break
+                break
+    if change_on_server_list:
+        api.get_updated_server_files(change_on_server_list)
 
 
 def send_locally_updated_files_to_server():
     current_metadata = fh.get_all_files_metadata()
     locally_changed_metadata = db.get_changed_metadata(current_metadata)
-    conflicted_changes = get_conflicted_changes(api.get_server_metadata())
+    conflicted_changes = get_conflicted_changes()
     if conflicted_changes:
-        print(f'ALERT: you have "{len(conflicted_changes)}" conflicted changes!\n You need to resolve these conflicts!')
+        print(
+            f'ALERT: you have "{len(conflicted_changes)}" conflicted changes!\n You need to resolve these conflicts!'
+        )
         update_list = []
         get_list = []
         for conflict_item in conflicted_changes:
             print(f'choose an action to resolve conflict in "{conflict_item["path"]}":')
             print("[1] force local change on the server.")
             print("[2] discard local changes and get latest server update.")
-            print("[3] get latest server version and resolve conflict manually. (NOTE: before choosing this option, you need to have a copy of the file contains the local changes outside the storage folder)")
-            
+            print(
+                "[3] get latest server version and resolve conflict manually. (NOTE: before choosing this option, you need to have a copy of the file contains the local changes outside the storage folder)"
+            )
+
             valid_choices = {"1", "2", "3"}
             choice = None
 
@@ -91,63 +131,31 @@ def send_locally_updated_files_to_server():
             else:
                 raise ValueError("Invalid choice. Please choose 1, 2, or 3.")
         if get_list:
-            print("get list:",get_list)
-            #api.get_server_files(get_list)
+            api.get_updated_server_files(get_list)
         if update_list:
-            print("update list", update_list)
-            #api.update_server_files(update_list)
+            api.update_server_files(update_list)
     else:
-        print("updated this:",locally_changed_metadata)
-        #api.update_server_files(locally_changed_metadata)
-        pass
+        if locally_changed_metadata:
+            api.update_server_files(locally_changed_metadata)
 
 
 def delete_locally_deleted_files_from_server():
     current_metadata = fh.get_all_files_metadata()
     deleted_locally = db.get_removed_metadata(current_metadata)
-    api.delete_server_files(deleted_locally)
+    if deleted_locally:
+        api.delete_server_files(deleted_locally)
+        db.delete(deleted_data_list=deleted_locally)
 
 
 def delete_from_local_deleted_files_on_server():
     server_metadata = api.get_server_metadata()
     deleted_on_server = db.get_removed_metadata(server_metadata)
-    for item in deleted_on_server:
-        full_path = str(storage_folder_path) + item["path"]
-        message = fh.delete_file(full_path)
-        print(message)
-
-
-class Watcher(FileSystemEventHandler):
-    def on_modified(self, event):
-        if event.is_directory:
-            return
-        print(
-            f"File {event.src_path} has been modified at:", datetime.now().isoformat()
-        )
-
-    def on_created(self, event):
-        if event.is_directory:
-            return
-        print(f"File {event.src_path} has been created at:", datetime.now().isoformat())
-
-    def on_deleted(self, event):
-        if event.is_directory:
-            return
-        print(f"File {event.src_path} has been deleted at:", datetime.now().isoformat())
-
-
-def watch_directory(directory_path):
-    event_handler = Watcher()
-    observer = Observer()
-    observer.schedule(event_handler, path=directory_path, recursive=True)
-    observer.start()
-
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        observer.stop()
-    observer.join()
+    if deleted_on_server:
+        for item in deleted_on_server:
+            item["path"]
+            message = fh.delete_file(item["path"])
+            print(message)
+        db.delete(deleted_data_list=deleted_on_server)
 
 
 # assign the storage folder
@@ -174,7 +182,9 @@ db = MetadataDatabase(f"{STORAGE_FOLDER_NAME}.db")
 fh = FilesHandler(storage_folder_path)
 
 # api
-api = ServerApi(token=token, storage_folder_path=storage_folder_path, base_url=BASE_URL,db=db)
+api = ServerApi(
+    token=token, storage_folder_path=storage_folder_path, base_url=BASE_URL, db=db
+)
 
 if __name__ == "__main__":
     main()
