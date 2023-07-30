@@ -42,8 +42,8 @@ class ServerApi:
         server_metadata = response.json()
         return server_metadata
 
-    def get_server_files(self, files_metadata_list):
-        print("GETTING FILES...")
+    def get_new_server_files(self, files_metadata_list):
+        print("GETTING NEW FILES...")
         for file_metadata in files_metadata_list:
             headers = {"Authorization": f"Token {self.token}"}
             response = requests.get(
@@ -57,6 +57,22 @@ class ServerApi:
                 destination_file.write(response.content)
             print("STATUS:", file_metadata["path"], "|", response.status_code)
         self.db.insert(files_metadata_list)
+
+    def get_updated_server_files(self, files_metadata_list):
+        print("GETTING UPDATED FILES...")
+        for file_metadata in files_metadata_list:
+            headers = {"Authorization": f"Token {self.token}"}
+            response = requests.get(
+                self.file_url + str(file_metadata["id"]) + "/", headers=headers
+            )
+            file_path = str(self.storage_folder_path) + file_metadata["path"]
+            dir_path = Path(file_path).parent
+            if not dir_path.exists():
+                dir_path.mkdir(parents=True)
+            with open(file_path, "wb+") as destination_file:
+                destination_file.write(response.content)
+            print("STATUS:", file_metadata["path"], "|", response.status_code)
+        self.db.update(files_metadata_list)
 
     def update_server_files(self, files_metadata_list):
         updated_metadata = []
