@@ -5,8 +5,6 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser
 
-import os
-
 from . import files_handler
 from .serializers import FileMetaDataSerializer, FileSerializer
 from .models import FileMetaData
@@ -51,7 +49,6 @@ class FileView(APIView):
         )
 
         return FileResponse(open(file, "rb"))
-    
 
     def post(self, request, format=None):
         # get the file and remove it from the request

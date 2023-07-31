@@ -2,9 +2,6 @@ from pathlib import Path
 import requests
 import time
 from decouple import config
-from datetime import datetime
-from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler
 
 from program.db_handler import MetadataDatabase
 from program.files_handler import FilesHandler
@@ -58,8 +55,14 @@ def get_token():
             "password": USER_PASSWORD,
         },
     )
+
     token = response.json().get("token")
-    print("Successful authentication!")
+    if token:
+        print("Successful authentication!")
+    else:
+        print("Token not found. Failed to authenticate.")
+        SystemExit(1)
+
     return token
 
 
@@ -169,14 +172,12 @@ USER_PASSWORD = config("USER_PASSWORD")
 BASE_URL = config("BASE_URL")
 # urls
 token_url = BASE_URL + "auth/"
-check_metadata_url = BASE_URL + "check/"
-file_url = BASE_URL + "file/"
 token = get_token()
 # the storage folder full path
 storage_folder_path = Path(__file__).resolve().parent / STORAGE_FOLDER_NAME
 
 # Database connection
-db = MetadataDatabase(f"{STORAGE_FOLDER_NAME}.db")
+db = MetadataDatabase(f".{STORAGE_FOLDER_NAME}.db")
 
 # files handler
 fh = FilesHandler(storage_folder_path)
