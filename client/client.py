@@ -30,10 +30,10 @@ def main():
                 api.upload_new_files(new_metadata)
 
             # send the updates to the server
-            send_locally_updated_files_to_server()
+            put_locally_updated_files_to_server()
 
             # get latest changes happened on the server's files
-            get_changes_on_server()
+            get_latest_files_update()
 
     except KeyboardInterrupt:
         pass
@@ -83,7 +83,7 @@ def get_conflicted_changes():
     return conflicted_metadata_list
 
 
-def get_changes_on_server():
+def get_latest_files_update():
     change_on_server_list = []
     current_metadata_list = fh.get_all_files_metadata()
     server_metadata_list = api.get_server_metadata()
@@ -101,7 +101,7 @@ def get_changes_on_server():
         api.get_updated_server_files(change_on_server_list)
 
 
-def send_locally_updated_files_to_server():
+def put_locally_updated_files_to_server():
     current_metadata = fh.get_all_files_metadata()
     locally_changed_metadata = db.get_changed_metadata(current_metadata)
     conflicted_changes = get_conflicted_changes()
