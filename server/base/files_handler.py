@@ -1,11 +1,10 @@
 import os
 
+STORAGE_FOLDER_PATH = "/home/hp/Desktop/CloudService/cloud_storage/"
+
 
 def get_file_path(owner: str, path: str):
-    storage_folder_path = os.path.abspath(
-        os.path.join(__file__, "..", "..", "..", "cloud_storage")
-    )
-    file_path = os.path.join(storage_folder_path, owner)
+    file_path = os.path.join(STORAGE_FOLDER_PATH, owner)
     file_path = file_path + path
     return file_path
 
