@@ -11,14 +11,6 @@ from .models import FileMetaData
 
 
 class CheckMetaDataView(APIView):
-    authentication_classes = [
-        authentication.SessionAuthentication,
-        authentication.TokenAuthentication,
-    ]
-    permission_classes = [
-        permissions.IsAuthenticatedOrReadOnly,
-    ]
-
     def get(self, request):
         current_user = request.user
         metadata_objects = FileMetaData.objects.filter(owner=current_user)
@@ -28,14 +20,6 @@ class CheckMetaDataView(APIView):
 
 class FileView(APIView):
     parser_classes = [MultiPartParser]
-
-    authentication_classes = [
-        authentication.SessionAuthentication,
-        authentication.TokenAuthentication,
-    ]
-    permission_classes = [
-        permissions.IsAuthenticated,
-    ]
 
     def get(self, request, pk, format=None):
         try:
