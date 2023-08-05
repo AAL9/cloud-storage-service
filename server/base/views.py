@@ -1,4 +1,5 @@
 from django.http import FileResponse
+from django.db import transaction
 
 from rest_framework import status
 from rest_framework.views import APIView
@@ -43,33 +44,34 @@ class FileView(APIView):
         json_data.update({"owner": request.user.username})
         file_serializer = FileSerializer(data=file_data)
         metadata_serializer = FileMetaDataSerializer(data=json_data)
-        if file_serializer.is_valid() and metadata_serializer.is_valid():
-            if FileMetaData.objects.filter(
-                path=metadata_serializer.validated_data["path"], owner=request.user
-            ):
-                return Response(
-                    {
-                        "message": f'ERROR: file \'{metadata_serializer.validated_data["path"]}\' already exists!!'
-                    }
+        with transaction.atomic():
+            if file_serializer.is_valid() and metadata_serializer.is_valid():
+                if FileMetaData.objects.filter(
+                    path=metadata_serializer.validated_data["path"], owner=request.user
+                ):
+                    return Response(
+                        {
+                            "message": f'ERROR: file \'{metadata_serializer.validated_data["path"]}\' already exists!!'
+                        }
+                    )
+                files_handler.upload_file(
+                    owner=request.user.username,
+                    path=metadata_serializer.validated_data["path"],
+                    file=file_data["file"],
                 )
-            files_handler.upload_file(
-                owner=request.user.username,
-                path=metadata_serializer.validated_data["path"],
-                file=file_data["file"],
-            )
-            metadata_serializer.validated_data["owner"] = request.user
-            metadata_serializer.save()
-            content = {
-                "message": f'File \'{metadata_serializer.validated_data["path"]}\' uploaded successfully.',
-                "metadata": metadata_serializer.data,
-            }
+                metadata_serializer.validated_data["owner"] = request.user
+                metadata_serializer.save()
+                content = {
+                    "message": f'File \'{metadata_serializer.validated_data["path"]}\' uploaded successfully.',
+                    "metadata": metadata_serializer.data,
+                }
+                return Response(
+                    content,
+                    status=status.HTTP_201_CREATED,
+                )
             return Response(
-                content,
-                status=status.HTTP_201_CREATED,
+                {"message": metadata_serializer.errors}, status=status.HTTP_400_BAD_REQUEST
             )
-        return Response(
-            {"message": metadata_serializer.errors}, status=status.HTTP_400_BAD_REQUEST
-        )
 
     def put(self, request, pk, format=None):
         # get the file and remove it from the request
@@ -87,33 +89,35 @@ class FileView(APIView):
 
         file_serializer = FileSerializer(data=file_data)
         metadata_serializer = FileMetaDataSerializer(old_file_metadata, data=json_data)
-        if file_serializer.is_valid() and metadata_serializer.is_valid():
-            files_handler.update_file(
-                owner=request.user.username,
-                path=metadata_serializer.validated_data["path"],
-                file=file_data["file"],
-            )
-            metadata_serializer.validated_data["owner"] = request.user
-            metadata_serializer.save()
-            content = {
-                "message": f'File \'{metadata_serializer.validated_data["path"]}\' updated successfully.',
-                "metadata": metadata_serializer.data,
-            }
-            return Response(
-                content,
-                status=status.HTTP_201_CREATED,
-            )
-        return Response(metadata_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        with transaction.atomic():
+            if file_serializer.is_valid() and metadata_serializer.is_valid():
+                files_handler.update_file(
+                    owner=request.user.username,
+                    path=metadata_serializer.validated_data["path"],
+                    file=file_data["file"],
+                )
+                metadata_serializer.validated_data["owner"] = request.user
+                metadata_serializer.save()
+                content = {
+                    "message": f'File \'{metadata_serializer.validated_data["path"]}\' updated successfully.',
+                    "metadata": metadata_serializer.data,
+                }
+                return Response(
+                    content,
+                    status=status.HTTP_201_CREATED,
+                )
+            return Response(metadata_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk, format=None):
-        try:
-            file_metadata = FileMetaData.objects.get(pk=pk, owner=request.user)
-        except FileMetaData.DoesNotExist:
-            return Response(
-                {"error": "File not found."}, status=status.HTTP_404_NOT_FOUND
+        with transaction.atomic():
+            try:
+                file_metadata = FileMetaData.objects.get(pk=pk, owner=request.user)
+            except FileMetaData.DoesNotExist:
+                return Response(
+                    {"error": "File not found."}, status=status.HTTP_404_NOT_FOUND
+                )
+            message = files_handler.delete_file(
+                owner=request.user.username, path=file_metadata.path
             )
-        message = files_handler.delete_file(
-            owner=request.user.username, path=file_metadata.path
-        )
-        file_metadata.delete()
-        return Response({"message": message}, status=status.HTTP_200_OK)
+            file_metadata.delete()
+            return Response({"message": message}, status=status.HTTP_200_OK)
