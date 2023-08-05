@@ -32,14 +32,9 @@ def delete_file(owner: str, path: str):
 
     try:
         os.remove(file_path)
-        message = f"File '{path}' has been deleted successfully."
-        return message
-    except FileNotFoundError:
-        message = f"File '{path}' not found. Unable to delete."
-        return message
-    except PermissionError:
-        message = f"Permission denied. Unable to delete file '{path}'."
-        return message
+    except FileNotFoundError as e:
+        raise e
+    except PermissionError as e:
+        raise e
     except Exception as e:
-        message = f"An error occurred while deleting file '{path}': {str(e)}"
-        return message
+        raise e
