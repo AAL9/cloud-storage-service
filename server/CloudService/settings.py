@@ -133,3 +133,6 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated",
     ],
 }
+
+# storage folder
+STORAGE_FOLDER_PATH = env("STORAGE_FOLDER_PATH")

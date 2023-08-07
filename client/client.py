@@ -41,9 +41,9 @@ def main():
 
 
 def check_storage_folder_exists():
-    if not (storage_folder_path.exists() and storage_folder_path.is_dir()):
+    if not (Path(STORAGE_FOLDER_PATH).exists() and Path(STORAGE_FOLDER_PATH).is_dir()):
         raise FileNotFoundError(
-            f"The {STORAGE_FOLDER_NAME} folder does not exist in the current directory."
+            f"The {STORAGE_FOLDER_PATH} folder does not exist in the current directory."
         )
 
 
@@ -162,7 +162,7 @@ def delete_from_local_deleted_files_on_server():
 
 
 # assign the storage folder
-STORAGE_FOLDER_NAME = config("STORAGE_FOLDER_NAME")
+STORAGE_FOLDER_PATH = config("STORAGE_FOLDER_PATH")
 
 # login information
 USER_NAME = config("USER_NAME")
@@ -173,18 +173,16 @@ BASE_URL = config("BASE_URL")
 # urls
 token_url = BASE_URL + "auth/"
 token = get_token()
-# the storage folder full path
-storage_folder_path = Path(__file__).resolve().parent / STORAGE_FOLDER_NAME
 
 # Database connection
-db = MetadataDatabase(f".{STORAGE_FOLDER_NAME}.db")
+db = MetadataDatabase(f".{Path(STORAGE_FOLDER_PATH).name}.db")
 
 # files handler
-fh = FilesHandler(storage_folder_path)
+fh = FilesHandler(STORAGE_FOLDER_PATH)
 
 # api
 api = ServerApi(
-    token=token, storage_folder_path=storage_folder_path, base_url=BASE_URL, db=db
+    token=token, storage_folder_path=STORAGE_FOLDER_PATH, base_url=BASE_URL, db=db
 )
 
 if __name__ == "__main__":

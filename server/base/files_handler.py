@@ -1,6 +1,6 @@
 import os
 
-STORAGE_FOLDER_PATH = "/home/hp/Desktop/CloudService/cloud_storage/"
+from CloudService.settings import STORAGE_FOLDER_PATH 
 
 
 def get_file_path(owner: str, path: str):

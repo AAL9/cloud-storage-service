@@ -109,3 +109,6 @@ class ServerApi:
                 self.file_url + str(file_metadata["id"]) + "/", headers=headers
             )
             print("STATUS:", response.json().get("message"), "|", response.status_code)
+
+    def _send_request(self, path, method, payload,headers):
+        return requests.Request(method, f"{self.base_url}/{path}", headers=headers)
