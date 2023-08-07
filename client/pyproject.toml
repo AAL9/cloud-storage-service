@@ -1,28 +1,25 @@
 [tool.poetry]
-name = "server"
+name = "client"
 version = "0.1.0"
 description = ""
-authors = ["A <a@a.a>"]
+authors = ["a <a@a.a>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.10"
-asgiref = "3.7.2"
 black = "23.7.0"
-click = "8.1.5"
-django = "4.2.3"
-django-environ = "0.10.0"
-djangorestframework = "3.14.0"
+certifi = "2023.5.7"
+charset-normalizer = "3.2.0"
+distlib = "0.3.6"
+filelock = "3.12.2"
+idna = "3.4"
 mypy-extensions = "1.0.0"
 packaging = "23.1"
 pathspec = "0.11.1"
-platformdirs = "3.9.0"
-psycopg = "3.1.9"
-psycopg-binary = "3.1.9"
-pytz = "2023.3"
-sqlparse = "0.4.4"
+platformdirs = "3.5.3"
+python-decouple = "3.8"
+requests = "2.31.0"
 tomli = "2.0.1"
-typing-extensions = "4.7.1"
 
 
 [build-system]
